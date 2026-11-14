@@ -70,3 +70,31 @@ def test_legal_pages():
     for path in ["/privacy", "/terms", "/support"]:
         r = client.get(path)
         assert r.status_code == 200 and "{{" not in r.text, path
+
+
+def test_ai_limiter_counts_and_resets():
+    from phishguard.ratelimit import AIUsageLimiter
+    lim = AIUsageLimiter(per_ip_per_hour=2, per_day=3)
+    assert lim.allow("a", now=0) is None
+    assert lim.allow("a", now=1) is None
+    assert lim.allow("a", now=2).startswith("limited")       # per-IP cap
+    assert lim.allow("b", now=3) is None
+    assert "daily" in lim.allow("c", now=4)                  # global cap
+    assert lim.allow("a", now=90000) is None                 # windows expire
+
+
+def test_ai_gate_limits_anonymous_but_not_key_holders(monkeypatch):
+    from phishguard.ratelimit import AIUsageLimiter
+    monkeypatch.setattr(main.settings, "llm_enabled", True)
+    monkeypatch.setattr(main.settings, "api_key", None)
+    monkeypatch.setattr(main, "ai_limiter", AIUsageLimiter(per_ip_per_hour=1, per_day=0))
+    calls = []
+    monkeypatch.setattr(main.engine.llm, "assess", lambda prompt: (calls.append(1), (None, "ok (fake)"))[1])
+    body = {"url": "https://a.com/login", "use_llm": True}
+    assert client.post("/api/v1/analyze/url", json=body).json()["llm_status"] == "ok (fake)"
+    second = client.post("/api/v1/analyze/url", json=body).json()
+    assert second["llm_status"].startswith("limited") and len(calls) == 1
+    assert second["verdict"] in {"safe", "suspicious", "phishing"}      # still get a rules verdict
+    monkeypatch.setattr(main.settings, "api_key", "k")
+    r = client.post("/api/v1/analyze/url", json=body, headers={"X-API-Key": "k"})
+    assert r.json()["llm_status"] == "ok (fake)" and len(calls) == 2

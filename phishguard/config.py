@@ -25,6 +25,9 @@ class Settings:
     llm_model: str = field(default_factory=lambda: os.getenv("PHISHGUARD_LLM_MODEL", "claude-opus-5-5"))
     llm_effort: str = field(default_factory=lambda: os.getenv("PHISHGUARD_LLM_EFFORT", "medium"))
     llm_weight: float = field(default_factory=lambda: float(os.getenv("PHISHGUARD_LLM_WEIGHT", "0.5")))
+    # Caps on AI checks for anonymous callers (0 = unlimited). Rule checks are never limited.
+    llm_limit_per_ip_hour: int = field(default_factory=lambda: int(os.getenv("PHISHGUARD_AI_LIMIT_PER_IP_HOUR", "20")))
+    llm_limit_per_day: int = field(default_factory=lambda: int(os.getenv("PHISHGUARD_AI_LIMIT_PER_DAY", "500")))
     max_body_chars: int = field(default_factory=lambda: int(os.getenv("PHISHGUARD_MAX_BODY_CHARS", "60000")))
 
     # Thresholds on the 0-100 risk score
