@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhishGuard</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  :root { --bg:#ffffff; --card:#f6f7f9; --text:#1c2230; --muted:#5b6475; --border:#dde1e8;
+          --safe:#1e8e3e; --sus:#b26a00; --phish:#c5221f; --accent:#2f5bea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1b1f27; --card:#232833; --text:#e6e9ef; --muted:#9aa3b2; --border:#343b48;
+            --safe:#4cc06a; --sus:#f0a43a; --phish:#ff6b63; --accent:#7b9bff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:14px; font:14px/1.45 "Segoe UI", system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  h1 { font-size:16px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+  h1 img { width:20px; height:20px; }
+  .status { color:var(--muted); }
+  .spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin:18px auto; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .verdict { font-size:22px; font-weight:700; margin:4px 0; }
+  .safe { color:var(--safe); } .suspicious { color:var(--sus); } .phishing { color:var(--phish); }
+  .meter { height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin:6px 0; }
+  .meter div { height:100%; transition:width .6s ease; }
+  .advice { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px; margin:12px 0; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:16px 0 6px; }
+  ul { padding-left:18px; margin:0; }
+  li { margin:4px 0; }
+  .sev { font:600 10px ui-monospace, monospace; text-transform:uppercase; margin-right:6px; }
+  .sev-critical, .sev-high { color:var(--phish); } .sev-medium { color:var(--sus); } .sev-low { color:var(--muted); }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 14px; font:inherit; font-weight:600; cursor:pointer; }
+  button.link { background:none; color:var(--accent); padding:0; font-weight:400; }
+  input { width:100%; padding:7px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font:inherit; }
+  .hidden { display:none; }
+  .foot { margin-top:18px; font-size:12px; color:var(--muted); }
+  .foot a { color:var(--muted); }
+</style>
+</head>
+<body>
+  <h1><img src="assets/icon-32.png" alt="">PhishGuard</h1>
+
+  <div id="loading"><div class="spinner"></div><p class="status" id="status">Checking this email…</p></div>
+  <div id="result" class="hidden"></div>
+  <div id="error" class="hidden"></div>
+
+  <div id="settings" class="hidden">
+    <h2>Settings</h2>
+    <label for="apikey">Organization access key</label>
+    <input id="apikey" type="password" autocomplete="off">
+    <p class="status">Your IT admin gives you this key. It is stored in your mailbox settings.</p>
+    <button id="save">Save and re-check</button>
+  </div>
+
+  <div class="foot">
+    <button class="link" id="recheck">Re-check</button> ·
+    <button class="link" id="toggleSettings">Settings</button> ·
+    <a href="../privacy" target="_blank" rel="noopener">Privacy</a> ·
+    <a href="../support" target="_blank" rel="noopener">Help</a>
+  </div>
+
+<script src="taskpane.js"></script>
+</body>
+</html>

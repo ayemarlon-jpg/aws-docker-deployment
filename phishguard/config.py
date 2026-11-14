@@ -38,6 +38,15 @@ class Settings:
     # API protection (optional)
     api_key: str | None = field(default_factory=lambda: os.getenv("PHISHGUARD_API_KEY") or None)
 
+    # Public listing / Outlook add-in
+    public_base_url: str = field(default_factory=lambda: os.getenv("PHISHGUARD_PUBLIC_BASE_URL", "https://localhost:8000").rstrip("/"))
+    addin_id: str = field(default_factory=lambda: os.getenv("PHISHGUARD_ADDIN_ID", "4e4a5af4-662a-4c23-996e-1f8d77d1fe65"))
+    addin_version: str = field(default_factory=lambda: os.getenv("PHISHGUARD_ADDIN_VERSION", "1.0.0.0"))
+    provider_name: str = field(default_factory=lambda: os.getenv("PHISHGUARD_PROVIDER_NAME", "PhishGuard"))
+    support_email: str = field(default_factory=lambda: os.getenv("PHISHGUARD_SUPPORT_EMAIL", "support@example.com"))
+    hosting_region: str = field(default_factory=lambda: os.getenv("PHISHGUARD_HOSTING_REGION", "the United States (us-east-1)"))
+    legal_effective_date: str = field(default_factory=lambda: os.getenv("PHISHGUARD_LEGAL_EFFECTIVE_DATE", "2026-11-14"))
+
     # Alerting
     webhook_url: str | None = field(default_factory=lambda: os.getenv("PHISHGUARD_WEBHOOK_URL") or None)
 

@@ -18,6 +18,7 @@ The two scores are combined into a **risk score from 0 to 100**. Hard technical 
 | **Mailbox monitor** | Watches an IMAP inbox (for example a shared "report phishing" mailbox). It tags each new message, sends a webhook alert for anything suspicious, and can move phishing to a quarantine folder. |
 | **Webhook alerts** | Sends JSON alerts to Slack, Teams or any endpoint you configure. |
 | **CLI** | `python -m phishguard.cli *.eml`. The exit code is 0, 1 or 2 (safe, suspicious, phishing), so you can use it in scripts. |
+| **Outlook add-in** | A **Check for phishing** button inside Outlook (desktop, web and mobile), ready to list on Microsoft AppSource. See [docs/microsoft-marketplace.md](docs/microsoft-marketplace.md). |
 | **Web UI** | Open `http://localhost:8000/` and paste a message source, upload a `.eml` file, or enter a URL. |
 
 ## Quick start
@@ -104,6 +105,10 @@ Then do the following:
 - **Secrets:** store `ANTHROPIC_API_KEY`, `IMAP_PASSWORD`, `PHISHGUARD_API_KEY` and the webhook URL in AWS Secrets Manager. Inject them through the task definition's `secrets` block, not as plain environment variables.
 - **EC2 alternative:** install Docker, copy the repo and `.env` to the instance, and run `docker compose --profile mailbox up -d`.
 
+## Microsoft Outlook add-in
+
+Once deployed, the server hosts an Outlook add-in at `/addin/manifest.xml`, with your domain filled in from `PHISHGUARD_PUBLIC_BASE_URL`. It also serves the privacy, terms and help pages Microsoft requires at `/privacy`, `/terms` and `/support`. For testing, sideloading and the AppSource submission, follow [docs/microsoft-marketplace.md](docs/microsoft-marketplace.md).
+
 ## Security notes
 
 - Email content is treated as **untrusted**. It is passed to Claude inside delimiters, and the system prompt tells the model to ignore instructions inside it. Instructions aimed at the AI count as a phishing signal. The model can only classify; it cannot take actions.
@@ -119,6 +124,8 @@ phishguard/
   email_parser.py       RFC 822 / HTML parsing
   analyzers/            headers.py, url.py, content.py, llm.py (Claude)
   automation/           mailbox.py (IMAP monitor), alerts.py (webhooks)
+  addin/                Outlook add-in (manifest template, task pane, icons)
+  legal/                privacy policy, terms and support page templates
   cli.py                command-line scanner
 tests/                  offline tests and sample phishing/legit emails
 ```

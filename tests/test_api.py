@@ -45,3 +45,28 @@ def test_api_key_enforced(monkeypatch):
     monkeypatch.setattr(main.settings, "api_key", "secret")
     assert client.post("/api/v1/analyze/url", json={"url": "https://a.com"}).status_code == 401
     assert client.post("/api/v1/analyze/url", json={"url": "https://a.com"}, headers={"X-API-Key": "secret"}).status_code == 200
+
+
+def test_addin_manifest_rendered(monkeypatch):
+    import xml.etree.ElementTree as ET
+    main._manifest.cache_clear()
+    monkeypatch.setattr(main.settings, "public_base_url", "https://phishguard.example.com")
+    r = client.get("/addin/manifest.xml")
+    main._manifest.cache_clear()
+    assert r.status_code == 200 and "{{" not in r.text
+    root = ET.fromstring(r.content)
+    ns = {"o": "http://schemas.microsoft.com/office/appforoffice/1.1"}
+    assert root.find("o:SourceLocation", ns) is None  # sanity: namespaced parse works
+    assert "https://phishguard.example.com/addin/taskpane.html" in r.text
+    assert "http://" not in r.text.replace("http://schemas", "").replace("http://www.w3.org", "")
+
+
+def test_addin_static_files():
+    for path in ["/addin/taskpane.html", "/addin/taskpane.js", "/addin/commands.html", "/addin/assets/icon-80.png"]:
+        assert client.get(path).status_code == 200, path
+
+
+def test_legal_pages():
+    for path in ["/privacy", "/terms", "/support"]:
+        r = client.get(path)
+        assert r.status_code == 200 and "{{" not in r.text, path

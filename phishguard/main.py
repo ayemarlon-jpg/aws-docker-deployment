@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import os
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from phishguard.automation.alerts import send_webhook
 from phishguard.config import get_settings
@@ -20,6 +23,8 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 STATIC = Path(__file__).parent / "static"
+ADDIN = Path(__file__).parent / "addin"
+LEGAL = Path(__file__).parent / "legal"
 
 settings = get_settings()
 engine = PhishingEngine(settings)
@@ -39,6 +44,64 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
 def _alert(report: AnalysisReport, source: str) -> None:
     if report.verdict == Verdict.phishing:
         send_webhook(settings.webhook_url, report, source)
+
+
+def _fill(template: str, values: dict[str, str]) -> str:
+    for key, value in values.items():
+        template = template.replace("{{" + key + "}}", value)
+    return template
+
+
+@lru_cache
+def _manifest() -> str:
+    base = settings.public_base_url
+    return _fill((ADDIN / "manifest.xml").read_text(), {
+        k: html.escape(v, quote=True) for k, v in {
+            "BASE_URL": base,
+            "ADDIN_ID": settings.addin_id,
+            "VERSION": settings.addin_version,
+            "PROVIDER": settings.provider_name,
+            "SUPPORT_URL": f"{base}/support",
+        }.items()
+    })
+
+
+@lru_cache
+def _legal_page(name: str) -> str:
+    return _fill((LEGAL / f"{name}.html").read_text(), {
+        "STYLE": (LEGAL / "_style.css").read_text(),
+        **{k: html.escape(v) for k, v in {
+            "PROVIDER": settings.provider_name,
+            "SUPPORT_EMAIL": settings.support_email,
+            "HOSTING_REGION": settings.hosting_region,
+            "EFFECTIVE_DATE": settings.legal_effective_date,
+        }.items()},
+    })
+
+
+@app.get("/addin/manifest.xml", include_in_schema=False)
+def addin_manifest() -> Response:
+    """Outlook add-in manifest with this deployment's public URL filled in."""
+    return Response(_manifest(), media_type="application/xml",
+                    headers={"Content-Disposition": 'inline; filename="manifest.xml"'})
+
+
+@app.get("/privacy", include_in_schema=False, response_class=HTMLResponse)
+def privacy() -> str:
+    return _legal_page("privacy")
+
+
+@app.get("/terms", include_in_schema=False, response_class=HTMLResponse)
+def terms() -> str:
+    return _legal_page("terms")
+
+
+@app.get("/support", include_in_schema=False, response_class=HTMLResponse)
+def support() -> str:
+    return _legal_page("support")
+
+
+app.mount("/addin", StaticFiles(directory=ADDIN), name="addin")
 
 
 @app.get("/", include_in_schema=False)
