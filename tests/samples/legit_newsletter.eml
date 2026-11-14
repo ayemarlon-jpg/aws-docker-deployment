@@ -1,0 +1,12 @@
+Return-Path: <news@github.com>
+Authentication-Results: mx.example.com; spf=pass smtp.mailfrom=github.com; dkim=pass header.d=github.com; dmarc=pass header.from=github.com
+From: GitHub <noreply@github.com>
+To: dev@example.com
+Subject: Your weekly digest
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<p>Hi Alex,</p>
+<p>Here is what happened in your repositories this week. 3 pull requests were merged.</p>
+<p><a href="https://github.com/notifications">View notifications</a></p>
+<p>You can change your email preferences in settings.</p>
