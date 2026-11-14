@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhishGuard</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2230; --muted:#5b6475; --border:#dde1e8;
+          --safe:#1e8e3e; --sus:#b26a00; --phish:#c5221f; --accent:#2f5bea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151b; --card:#1b1f27; --text:#e6e9ef; --muted:#9aa3b2; --border:#2c323d;
+            --safe:#4cc06a; --sus:#f0a43a; --phish:#ff6b63; --accent:#7b9bff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:880px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:24px; }
+  p.sub { margin:0 0 20px; color:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .tabs { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .tabs button { background:none; border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:6px; cursor:pointer; }
+  .tabs button.active { border-color:var(--accent); color:var(--accent); font-weight:600; }
+  textarea, input[type=text], input[type=password] { width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font:13px/1.4 ui-monospace, monospace; }
+  textarea { min-height:220px; resize:vertical; }
+  .row { display:flex; gap:12px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .go { background:var(--accent); color:#fff; border:0; padding:9px 18px; border-radius:6px; font-weight:600; cursor:pointer; }
+  .go:disabled { opacity:.6; cursor:wait; }
+  .verdict { font-size:22px; font-weight:700; }
+  .safe { color:var(--safe); } .suspicious { color:var(--sus); } .phishing { color:var(--phish); }
+  .meter { height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin:8px 0 4px; }
+  .meter div { height:100%; }
+  ul { padding-left:20px; margin:6px 0; }
+  .sev { display:inline-block; min-width:66px; font:600 11px ui-monospace, monospace; text-transform:uppercase; }
+  .sev-critical, .sev-high { color:var(--phish); } .sev-medium { color:var(--sus); } .sev-low, .sev-info { color:var(--muted); }
+  .muted { color:var(--muted); font-size:13px; }
+  .hidden { display:none; }
+  code { word-break:break-all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PhishGuard</h1>
+  <p class="sub">Paste a suspicious email or link. Rule-based detectors and Claude analyze it together.</p>
+
+  <div class="card">
+    <div class="tabs">
+      <button data-tab="raw" class="active">Raw email (.eml source)</button>
+      <button data-tab="file">Upload .eml</button>
+      <button data-tab="url">URL</button>
+    </div>
+    <div id="tab-raw"><textarea id="raw" placeholder="Paste the full message source (in Gmail: ⋮ → Show original; in Outlook: View → View message source)"></textarea></div>
+    <div id="tab-file" class="hidden"><input type="file" id="file" accept=".eml,message/rfc822"></div>
+    <div id="tab-url" class="hidden"><input type="text" id="url" placeholder="https://example.com/login"></div>
+    <div class="row">
+      <label><input type="checkbox" id="llm" checked> Use AI analysis</label>
+      <input type="password" id="apikey" placeholder="API key (if required)" style="max-width:220px">
+      <button class="go" id="go">Analyze</button>
+    </div>
+  </div>
+
+  <div id="out" class="card hidden"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let tab = "raw";
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x === b));
+  tab = b.dataset.tab;
+  ["raw", "file", "url"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== tab));
+}));
+
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "class" ? (n.className = v) : n.setAttribute(k, v);
+  for (const c of children) if (c != null) n.append(c);  // append() treats strings as text: no HTML injection
+  return n;
+}
+
+function render(r) {
+  const out = $("out");
+  out.replaceChildren();
+  const color = { safe: "var(--safe)", suspicious: "var(--sus)", phishing: "var(--phish)" }[r.verdict];
+  out.append(
+    el("div", { class: "verdict " + r.verdict }, r.verdict.toUpperCase()),
+    el("div", { class: "meter" }, Object.assign(el("div"), { style: `width:${r.risk_score}%;background:${color}` })),
+    el("div", { class: "muted" }, `Risk ${r.risk_score}/100 · rules ${r.heuristic_score}/100 · AI: ${r.llm_status}`)
+  );
+  for (const [k, v] of Object.entries(r.summary || {})) if (v) out.append(el("div", { class: "muted" }, `${k}: ${v}`));
+  if (r.llm) {
+    out.append(el("h3", {}, "AI assessment"),
+      el("div", {}, `${r.llm.verdict} · ${Math.round(r.llm.confidence * 100)}% confidence · ${r.llm.attack_type} · impersonating: ${r.llm.impersonated_brand}`),
+      el("ul", {}, ...r.llm.reasons.map((x) => el("li", {}, x))),
+      el("div", {}, el("strong", {}, "Recommended: "), r.llm.recommended_action));
+  }
+  const f = r.findings.filter((x) => x.severity !== "info");
+  out.append(el("h3", {}, `Signals (${f.length})`));
+  out.append(f.length ? el("ul", {}, ...f.map((x) => el("li", {},
+    el("span", { class: "sev sev-" + x.severity }, x.severity), x.description,
+    x.evidence ? el("div", { class: "muted" }, el("code", {}, x.evidence)) : null))) : el("div", { class: "muted" }, "No rule-based signals."));
+  out.classList.remove("hidden");
+}
+
+$("go").addEventListener("click", async () => {
+  const useLlm = $("llm").checked;
+  const headers = {};
+  if ($("apikey").value) headers["X-API-Key"] = $("apikey").value;
+  let resp;
+  $("go").disabled = true; $("go").textContent = "Analyzing…";
+  try {
+    if (tab === "file") {
+      if (!$("file").files[0]) throw new Error("Choose a file first");
+      const fd = new FormData(); fd.append("file", $("file").files[0]);
+      resp = await fetch(`/api/v1/analyze/eml?use_llm=${useLlm}`, { method: "POST", body: fd, headers });
+    } else {
+      const body = tab === "url" ? { url: $("url").value, use_llm: useLlm } : { raw: $("raw").value, use_llm: useLlm };
+      resp = await fetch(`/api/v1/analyze/${tab === "url" ? "url" : "email"}`, {
+        method: "POST", body: JSON.stringify(body), headers: { ...headers, "Content-Type": "application/json" } });
+    }
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    render(data);
+  } catch (e) {
+    $("out").replaceChildren(el("div", { class: "phishing" }, "Error: " + e.message));
+    $("out").classList.remove("hidden");
+  } finally {
+    $("go").disabled = false; $("go").textContent = "Analyze";
+  }
+});
+</script>
+</body>
+</html>

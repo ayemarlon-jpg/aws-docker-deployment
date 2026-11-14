@@ -1,0 +1,25 @@
+Return-Path: <bounce@mailer-xz91.ru>
+Authentication-Results: mx.example.com; spf=fail smtp.mailfrom=mailer-xz91.ru; dkim=none; dmarc=fail header.from=paypa1-security.com
+From: "PayPal Security" <service@paypa1-security.com>
+Reply-To: paypal.resolution.center@gmail.com
+To: victim@example.com
+Subject: Urgent: Your account has been suspended
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+
+Dear Customer,
+
+We detected unusual sign-in activity. Your account has been suspended.
+Verify your account within 24 hours or it will be permanently closed.
+
+--b1
+Content-Type: text/html; charset=utf-8
+
+<p>Dear Customer,</p>
+<p>We detected unusual sign-in activity. Your account has been suspended.</p>
+<p><a href="http://paypa1-security.com.account-verify.xyz/login/verify?id=8812">https://www.paypal.com/signin</a></p>
+<p>Verify your account within 24 hours or it will be permanently closed.</p>
+--b1--

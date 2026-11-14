@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    image: phishguard:latest
+    ports:
+      - "8000:8000"
+    env_file: .env
+    restart: unless-stopped
+
+  # Automated inbox monitoring. Start with: docker compose --profile mailbox up -d
+  mailbox:
+    image: phishguard:latest
+    command: ["python", "-m", "phishguard.automation.mailbox"]
+    env_file: .env
+    environment:
+      PHISHGUARD_STATE_FILE: /data/imap_state.json
+    volumes:
+      - mailbox-state:/data
+    healthcheck:
+      disable: true
+    depends_on:
+      - api
+    restart: unless-stopped
+    profiles: ["mailbox"]
+
+volumes:
+  mailbox-state:
