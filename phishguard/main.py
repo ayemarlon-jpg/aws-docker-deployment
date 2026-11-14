@@ -102,6 +102,7 @@ def support() -> str:
 
 
 app.mount("/addin", StaticFiles(directory=ADDIN), name="addin")
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 @app.get("/", include_in_schema=False)

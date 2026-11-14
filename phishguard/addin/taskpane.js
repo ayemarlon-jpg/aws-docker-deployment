@@ -59,50 +59,98 @@
     try { return Office.context.roamingSettings.get(SETTINGS_KEY) || ""; } catch (e) { return ""; }
   }
 
+  const NS = "http://www.w3.org/2000/svg";
+  function icon(id) {
+    const svg = document.createElementNS(NS, "svg");
+    const use = document.createElementNS(NS, "use");
+    use.setAttribute("href", "#" + id);
+    svg.append(use);
+    return svg;
+  }
+
+  function ring(score) {
+    const R = 31, C = 2 * Math.PI * R;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 76 76");
+    const mk = (stroke, dash) => {
+      const c = document.createElementNS(NS, "circle");
+      [["cx", 38], ["cy", 38], ["r", R], ["fill", "none"], ["stroke", stroke], ["stroke-width", 8], ["stroke-linecap", "round"]].forEach(([k, v]) => c.setAttribute(k, v));
+      if (dash) { c.setAttribute("stroke-dasharray", C); c.setAttribute("stroke-dashoffset", C); c.style.transition = "stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)"; }
+      return c;
+    };
+    const track = mk("color-mix(in srgb, var(--v) 18%, transparent)");
+    const arc = mk("var(--v)", true);
+    svg.append(track, arc);
+    const n = el("div", "n");
+    const num = el("div", null, "0");
+    n.append(el("div"));
+    n.firstChild.append(num, el("small", null, "RISK"));
+    const wrap = el("div", "ring");
+    wrap.append(svg, n);
+    requestAnimationFrame(() => requestAnimationFrame(() => (arc.style.strokeDashoffset = C * (1 - score / 100))));
+    const t0 = performance.now();
+    const step = (t) => { const p = Math.min(1, (t - t0) / 1000); num.textContent = Math.round(score * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+    return wrap;
+  }
+
+  const VERDICT = {
+    safe: { title: "Looks safe", sub: "No meaningful phishing signals.", advice: "No signs of phishing found. Still be careful with unexpected requests for money, passwords or codes." },
+    suspicious: { title: "Be careful", sub: "Some warning signs found.", advice: "Don't click links, open attachments or share information until you've confirmed the sender another way." },
+    phishing: { title: "Phishing detected", sub: "Strong signs of an attack.", advice: "Don't click links, open attachments or reply. Report it to your IT/security team and delete it." },
+  };
+
   function render(r) {
+    const v = VERDICT[r.verdict];
     const out = $("result");
+    out.className = "fade v-" + r.verdict;
     out.replaceChildren();
-    const color = { safe: "var(--safe)", suspicious: "var(--sus)", phishing: "var(--phish)" }[r.verdict];
-    const label = { safe: "Looks safe", suspicious: "Be careful", phishing: "Phishing detected" }[r.verdict];
-    out.append(el("div", "verdict " + r.verdict, label));
-    const meter = el("div", "meter");
-    const bar = el("div");
-    bar.style.width = "0%";
-    bar.style.background = color;
-    meter.append(bar);
-    out.append(meter, el("div", "status", `Risk ${r.risk_score}/100`));
-    requestAnimationFrame(() => (bar.style.width = r.risk_score + "%"));
 
-    const advice = {
-      safe: "No signs of phishing were found. Stay alert for unexpected requests for money or passwords.",
-      suspicious: "Don't click links, open attachments or reply with sensitive information until you've confirmed the sender another way.",
-      phishing: "Don't click any links, open attachments or reply. Report it to your IT/security team and delete it.",
-    }[r.verdict];
-    out.append(el("div", "advice", r.llm && r.llm.recommended_action ? r.llm.recommended_action : advice));
+    const hero = el("div", "hero");
+    const txt = el("div");
+    txt.append(el("div", "title", v.title), el("div", "sub", v.sub));
+    hero.append(ring(r.risk_score), txt);
+    out.append(hero);
 
-    if (r.llm && r.llm.reasons && r.llm.reasons.length) {
-      out.append(el("h2", null, "Why"));
+    const advice = el("div", "advice");
+    advice.append(icon(r.verdict === "safe" ? "i-shield" : "i-alert"), el("div", null, r.llm && r.llm.recommended_action ? r.llm.recommended_action : v.advice));
+    out.append(advice);
+
+    if (r.llm) {
+      const h = el("h2"); h.append(icon("i-sparkle"), document.createTextNode("AI assessment"));
+      const box = el("div", "ai");
+      const tags = el("div", "tags");
+      tags.append(el("span", "tag", `${Math.round(r.llm.confidence * 100)}% confident`));
+      if (r.llm.attack_type && r.llm.attack_type !== "none") tags.append(el("span", "tag", r.llm.attack_type.replace(/_/g, " ")));
+      if (r.llm.impersonated_brand && r.llm.impersonated_brand.toLowerCase() !== "none") tags.append(el("span", "tag", "Impersonating " + r.llm.impersonated_brand));
       const ul = el("ul");
-      r.llm.reasons.slice(0, 5).forEach((x) => ul.append(el("li", null, x)));
-      out.append(ul);
+      (r.llm.reasons || []).slice(0, 5).forEach((x) => ul.append(el("li", null, x)));
+      box.append(tags, ul);
+      out.append(h, box);
     }
+
     const signals = (r.findings || []).filter((f) => f.severity !== "info").slice(0, 8);
     if (signals.length) {
-      out.append(el("h2", null, "Warning signs"));
-      const ul = el("ul");
-      signals.forEach((f) => {
+      const h = el("h2"); h.append(icon("i-alert"), document.createTextNode(`Warning signs · ${signals.length}`));
+      const ul = el("ul", "list");
+      signals.forEach((f, i) => {
         const li = el("li");
-        li.append(el("span", "sev sev-" + f.severity, f.severity), document.createTextNode(f.description));
+        li.style.animationDelay = i * 40 + "ms";
+        li.append(el("span", "sd sd-" + f.severity), el("span", null, f.description));
         ul.append(li);
       });
-      out.append(ul);
+      out.append(h, ul);
     }
+    if (!r.llm && r.llm_status !== "disabled") out.append(el("p", "muted", "AI analysis was unavailable, so this verdict uses security rules only."));
     show("result");
   }
 
   function fail(message, offerSettings) {
     const box = $("error");
-    box.replaceChildren(el("p", "phishing", message));
+    box.replaceChildren();
+    const inner = el("div", "error fade");
+    inner.append(icon("i-alert"), el("div", null, message));
+    box.append(inner);
     if (offerSettings) $("settings").classList.remove("hidden");
     show("error");
   }

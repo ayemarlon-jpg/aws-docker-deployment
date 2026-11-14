@@ -6,56 +6,114 @@
 <title>PhishGuard</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
-  :root { --bg:#ffffff; --card:#f6f7f9; --text:#1c2230; --muted:#5b6475; --border:#dde1e8;
-          --safe:#1e8e3e; --sus:#b26a00; --phish:#c5221f; --accent:#2f5bea; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#1b1f27; --card:#232833; --text:#e6e9ef; --muted:#9aa3b2; --border:#343b48;
-            --safe:#4cc06a; --sus:#f0a43a; --phish:#ff6b63; --accent:#7b9bff; }
+  /* Matches Outlook's Fluent look: Segoe UI, soft surfaces, 8px radii. */
+  :root {
+    --bg: #ffffff; --surface: #f7f8fb; --border: #e6e9f0; --text: #111827; --text-2: #4b5563; --text-3: #8a94a6;
+    --accent: #4f46e5; --accent-2: #7c3aed; --accent-soft: #eef0ff;
+    --safe: #059669; --safe-soft: #e7f8f1; --warn: #d97706; --warn-soft: #fff5e6; --danger: #dc2626; --danger-soft: #fdeceb;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; padding:14px; font:14px/1.45 "Segoe UI", system-ui, sans-serif; background:var(--bg); color:var(--text); }
-  h1 { font-size:16px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
-  h1 img { width:20px; height:20px; }
-  .status { color:var(--muted); }
-  .spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin:18px auto; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .verdict { font-size:22px; font-weight:700; margin:4px 0; }
-  .safe { color:var(--safe); } .suspicious { color:var(--sus); } .phishing { color:var(--phish); }
-  .meter { height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin:6px 0; }
-  .meter div { height:100%; transition:width .6s ease; }
-  .advice { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px; margin:12px 0; }
-  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:16px 0 6px; }
-  ul { padding-left:18px; margin:0; }
-  li { margin:4px 0; }
-  .sev { font:600 10px ui-monospace, monospace; text-transform:uppercase; margin-right:6px; }
-  .sev-critical, .sev-high { color:var(--phish); } .sev-medium { color:var(--sus); } .sev-low { color:var(--muted); }
-  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 14px; font:inherit; font-weight:600; cursor:pointer; }
-  button.link { background:none; color:var(--accent); padding:0; font-weight:400; }
-  input { width:100%; padding:7px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font:inherit; }
-  .hidden { display:none; }
-  .foot { margin-top:18px; font-size:12px; color:var(--muted); }
-  .foot a { color:var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1d24; --surface: #23262f; --border: #323643; --text: #eceef3; --text-2: #b0b7c5; --text-3: #7a8396;
+      --accent: #8b85ff; --accent-2: #b38bff; --accent-soft: #262a52;
+      --safe: #34d399; --safe-soft: #12302a; --warn: #fbbf24; --warn-soft: #33290f; --danger: #f87171; --danger-soft: #3a1b1d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; cursor: pointer; }
+  .top { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .top img { width: 22px; height: 22px; }
+  .top b { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .top .icon-btn { margin-left: auto; }
+  .icon-btn { border: 0; background: none; color: var(--text-3); width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; }
+  .icon-btn:hover { background: var(--surface); color: var(--text); }
+  .icon-btn svg { width: 17px; height: 17px; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 26px 0 10px; }
+  .pulse { width: 72px; height: 72px; margin: 0 auto 14px; border-radius: 20px; background: var(--accent-soft); display: grid; place-items: center; position: relative; overflow: hidden; }
+  .pulse img { width: 38px; height: 38px; position: relative; }
+  .pulse::after { content: ""; position: absolute; left: 0; right: 0; height: 45%; background: linear-gradient(transparent, color-mix(in srgb, var(--accent) 35%, transparent), transparent); animation: scan 1.3s ease-in-out infinite; }
+  @keyframes scan { from { transform: translateY(-110%); } to { transform: translateY(260%); } }
+  .loading p { color: var(--text-2); margin: 0; }
+  .skel { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--surface), var(--border), var(--surface)); background-size: 200% 100%; animation: shimmer 1.2s infinite; margin: 10px 0; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* Result */
+  .v-safe { --v: var(--safe); --v-soft: var(--safe-soft); }
+  .v-suspicious { --v: var(--warn); --v-soft: var(--warn-soft); }
+  .v-phishing { --v: var(--danger); --v-soft: var(--danger-soft); }
+  .hero { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 14px; background: var(--v-soft); }
+  .ring { position: relative; width: 76px; height: 76px; flex: none; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring .n { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 22px; letter-spacing: -.02em; }
+  .ring .n small { display: block; font-size: 9px; font-weight: 700; color: var(--text-3); letter-spacing: .08em; text-align: center; margin-top: -2px; }
+  .title { font-size: 18px; font-weight: 700; letter-spacing: -.01em; color: var(--v); line-height: 1.25; }
+  .sub { color: var(--text-2); font-size: 13px; margin-top: 2px; }
+  .advice { display: flex; gap: 10px; margin: 12px 0 4px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: 13.5px; }
+  .advice svg { width: 17px; height: 17px; flex: none; color: var(--v); margin-top: 1px; }
+  h2 { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin: 18px 0 8px; }
+  h2 svg { width: 13px; height: 13px; }
+  .ai { padding: 12px; border-radius: 12px; background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-2) 10%, var(--bg))); border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); color: var(--text-2); }
+  .ai ul, .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .ai li { display: flex; gap: 8px; font-size: 13.5px; }
+  .ai li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 8px; flex: none; }
+  .list li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; animation: in .3s ease both; }
+  .sd { width: 8px; height: 8px; border-radius: 3px; margin-top: 6px; flex: none; }
+  .sd-critical { background: var(--danger); } .sd-high { background: color-mix(in srgb, var(--danger) 75%, var(--warn)); } .sd-medium { background: var(--warn); } .sd-low { background: var(--text-3); }
+  .muted { color: var(--text-3); font-size: 12.5px; }
+  @keyframes in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .fade { animation: in .35s ease both; }
+
+  /* Error + settings */
+  .error { padding: 14px; border-radius: 12px; background: var(--danger-soft); display: flex; gap: 10px; font-size: 13.5px; }
+  .error svg { width: 18px; height: 18px; color: var(--danger); flex: none; margin-top: 1px; }
+  .settings { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  .settings label { font-weight: 600; font-size: 13px; display: block; margin-bottom: 6px; }
+  input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .primary { margin-top: 10px; width: 100%; border: 0; border-radius: 8px; padding: 9px; font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .foot { display: flex; gap: 14px; justify-content: center; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px; }
+  .foot a, .foot button { color: var(--text-3); text-decoration: none; background: none; border: 0; padding: 0; }
+  .foot a:hover, .foot button:hover { color: var(--text); }
+  .hidden { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-  <h1><img src="assets/icon-32.png" alt="">PhishGuard</h1>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></symbol>
+  </defs></svg>
 
-  <div id="loading"><div class="spinner"></div><p class="status" id="status">Checking this email…</p></div>
+  <div class="top">
+    <img src="assets/icon-32.png" alt=""><b>PhishGuard</b>
+    <button class="icon-btn" id="toggleSettings" title="Settings" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
+  </div>
+
+  <div id="loading" class="loading">
+    <div class="pulse"><img src="assets/icon-64.png" alt=""></div>
+    <p id="status">Checking this email…</p>
+    <div class="skel" style="width:90%;margin-top:22px"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:80%"></div>
+  </div>
   <div id="result" class="hidden"></div>
   <div id="error" class="hidden"></div>
 
-  <div id="settings" class="hidden">
-    <h2>Settings</h2>
+  <div id="settings" class="settings hidden">
     <label for="apikey">Organization access key</label>
-    <input id="apikey" type="password" autocomplete="off">
-    <p class="status">Your IT admin gives you this key. It is stored in your mailbox settings.</p>
-    <button id="save">Save and re-check</button>
+    <input id="apikey" type="password" autocomplete="off" placeholder="Paste the key from your IT admin">
+    <p class="muted">Stored in your mailbox settings and only sent to PhishGuard.</p>
+    <button class="primary" id="save">Save and re-check</button>
   </div>
 
   <div class="foot">
-    <button class="link" id="recheck">Re-check</button> ·
-    <button class="link" id="toggleSettings">Settings</button> ·
-    <a href="../privacy" target="_blank" rel="noopener">Privacy</a> ·
+    <button id="recheck">Re-check</button>
+    <a href="../privacy" target="_blank" rel="noopener">Privacy</a>
     <a href="../support" target="_blank" rel="noopener">Help</a>
   </div>
 

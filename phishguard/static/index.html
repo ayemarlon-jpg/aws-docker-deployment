@@ -4,128 +4,566 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PhishGuard</title>
+<meta name="description" content="Check any email or link for phishing in seconds. Security rules and AI, explained in plain English.">
+<link rel="icon" href="/addin/assets/icon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2230; --muted:#5b6475; --border:#dde1e8;
-          --safe:#1e8e3e; --sus:#b26a00; --phish:#c5221f; --accent:#2f5bea; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#12151b; --card:#1b1f27; --text:#e6e9ef; --muted:#9aa3b2; --border:#2c323d;
-            --safe:#4cc06a; --sus:#f0a43a; --phish:#ff6b63; --accent:#7b9bff; }
+  :root {
+    --bg: #f5f7fb; --bg-grad: radial-gradient(1200px 600px at 10% -10%, #e3e9ff 0%, transparent 60%), radial-gradient(900px 500px at 110% 0%, #f1e6ff 0%, transparent 55%);
+    --surface: #ffffff; --surface-2: #f3f5f9; --border: #e4e8f0; --border-strong: #d3d9e4;
+    --text: #0f172a; --text-2: #475569; --text-3: #8391a7;
+    --accent: #4f46e5; --accent-2: #7c3aed; --accent-soft: #eef0ff; --on-accent: #ffffff;
+    --safe: #059669; --safe-soft: #e7f8f1; --warn: #d97706; --warn-soft: #fff5e6; --danger: #dc2626; --danger-soft: #fdeceb;
+    --shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -8px rgba(15,23,42,.08);
+    --shadow-lg: 0 2px 4px rgba(15,23,42,.04), 0 24px 48px -16px rgba(15,23,42,.18);
+    --radius: 16px;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; font:15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--text); }
-  main { max-width:880px; margin:0 auto; padding:24px 16px 64px; }
-  h1 { margin:0 0 4px; font-size:24px; }
-  p.sub { margin:0 0 20px; color:var(--muted); }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
-  .tabs { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
-  .tabs button { background:none; border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:6px; cursor:pointer; }
-  .tabs button.active { border-color:var(--accent); color:var(--accent); font-weight:600; }
-  textarea, input[type=text], input[type=password] { width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font:13px/1.4 ui-monospace, monospace; }
-  textarea { min-height:220px; resize:vertical; }
-  .row { display:flex; gap:12px; align-items:center; margin-top:12px; flex-wrap:wrap; }
-  .go { background:var(--accent); color:#fff; border:0; padding:9px 18px; border-radius:6px; font-weight:600; cursor:pointer; }
-  .go:disabled { opacity:.6; cursor:wait; }
-  .verdict { font-size:22px; font-weight:700; }
-  .safe { color:var(--safe); } .suspicious { color:var(--sus); } .phishing { color:var(--phish); }
-  .meter { height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin:8px 0 4px; }
-  .meter div { height:100%; }
-  ul { padding-left:20px; margin:6px 0; }
-  .sev { display:inline-block; min-width:66px; font:600 11px ui-monospace, monospace; text-transform:uppercase; }
-  .sev-critical, .sev-high { color:var(--phish); } .sev-medium { color:var(--sus); } .sev-low, .sev-info { color:var(--muted); }
-  .muted { color:var(--muted); font-size:13px; }
-  .hidden { display:none; }
-  code { word-break:break-all; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0d14; --bg-grad: radial-gradient(1200px 600px at 10% -10%, #1b1f4a 0%, transparent 60%), radial-gradient(900px 500px at 110% 0%, #2a1840 0%, transparent 55%);
+      --surface: #121722; --surface-2: #192030; --border: #232b3b; --border-strong: #2f394d;
+      --text: #e8ecf4; --text-2: #a3aec2; --text-3: #6b778d;
+      --accent: #8b85ff; --accent-2: #b38bff; --accent-soft: #1d2045; --on-accent: #0b0d18;
+      --safe: #34d399; --safe-soft: #0f2a22; --warn: #fbbf24; --warn-soft: #2c2411; --danger: #f87171; --danger-soft: #2f1517;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -8px rgba(0,0,0,.5);
+      --shadow-lg: 0 2px 4px rgba(0,0,0,.3), 0 24px 48px -16px rgba(0,0,0,.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; background: var(--bg-grad), var(--bg); background-attachment: fixed; color: var(--text);
+         font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+  /* Nav */
+  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(160%) blur(12px); -webkit-backdrop-filter: saturate(160%) blur(12px);
+        background: color-mix(in srgb, var(--bg) 70%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+  nav .wrap { display: flex; align-items: center; gap: 16px; height: 62px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -.01em; text-decoration: none; color: var(--text); }
+  .brand img { width: 28px; height: 28px; }
+  .nav-links { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .nav-links a { color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 14px; padding: 6px 10px; border-radius: 8px; }
+  .nav-links a:hover { color: var(--text); background: var(--surface-2); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+          background: var(--surface); border: 1px solid var(--border); color: var(--text-2); white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+  .dot.on { background: var(--safe); box-shadow: 0 0 0 3px color-mix(in srgb, var(--safe) 25%, transparent); }
+
+  /* Hero */
+  header.hero { padding: 56px 0 28px; text-align: center; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--accent);
+             background: var(--accent-soft); padding: 5px 12px; border-radius: 999px; }
+  h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.08; letter-spacing: -.035em; font-weight: 800; margin: 18px auto 14px; max-width: 760px; }
+  h1 .grad { background: linear-gradient(100deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: 17px; color: var(--text-2); max-width: 600px; margin: 0 auto; }
+
+  /* Layout */
+  main { padding-bottom: 72px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 960px) { .grid { grid-template-columns: minmax(0, 1fr); } .hide-sm { display: none !important; } }
+  #out { scroll-margin-top: 78px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .card-pad { padding: 22px; }
+  .card h2 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+  .sticky { position: sticky; top: 82px; }
+  @media (max-width: 960px) { .sticky { position: static; } }
+
+  /* Segmented control */
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; gap: 4px; margin-bottom: 16px; }
+  .seg button { border: 0; background: none; padding: 9px 8px; border-radius: 9px; font-weight: 600; font-size: 14px; color: var(--text-2);
+                display: flex; align-items: center; justify-content: center; gap: 7px; transition: background .15s, color .15s, box-shadow .15s; }
+  .seg button svg { width: 16px; height: 16px; flex: none; }
+  .seg button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(15,23,42,.08), 0 0 0 1px var(--border); }
+
+  textarea, .field { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; transition: border-color .15s, box-shadow .15s; }
+  textarea { min-height: 260px; resize: vertical; font: 12.5px/1.55 "JetBrains Mono", ui-monospace, monospace; }
+  textarea:focus, .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .url-wrap { position: relative; }
+  .url-wrap svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-3); }
+  .url-wrap .field { padding-left: 42px; font-size: 15px; }
+
+  .drop { border: 2px dashed var(--border-strong); border-radius: 14px; padding: 40px 20px; text-align: center; color: var(--text-2); background: var(--surface-2);
+          transition: border-color .15s, background .15s; cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop svg { width: 36px; height: 36px; color: var(--accent); margin-bottom: 8px; }
+  .drop strong { color: var(--text); display: block; font-size: 15px; }
+  .drop .file-name { margin-top: 10px; font-weight: 600; color: var(--accent); }
+
+  .samples { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+  .samples .label { font-size: 13px; color: var(--text-3); margin-right: 2px; }
+  .chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; color: var(--text-2); transition: all .15s; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  .actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; color: var(--text-2); cursor: pointer; user-select: none; }
+  .switch input { position: absolute; opacity: 0; pointer-events: none; }
+  .switch .track { width: 38px; height: 22px; border-radius: 999px; background: var(--border-strong); position: relative; transition: background .2s; flex: none; }
+  .switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 11px; padding: 11px 20px; font-weight: 600; font-size: 15px;
+         color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+         transition: transform .1s, box-shadow .15s, opacity .15s; }
+  @media (prefers-color-scheme: dark) { .btn { color: #fff; } }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .7; cursor: wait; transform: none; }
+  .btn svg { width: 17px; height: 17px; }
+  .kbd { font-size: 11px; color: var(--text-3); }
+  details.key { margin-top: 14px; font-size: 13px; color: var(--text-3); }
+  details.key summary { cursor: pointer; }
+  details.key .field { margin-top: 8px; padding: 9px 12px; font-size: 14px; }
+
+  /* Empty + loading states */
+  .state { padding: 44px 28px; text-align: center; }
+  .state .art { width: 112px; height: 112px; margin: 0 auto 18px; border-radius: 28px; display: grid; place-items: center;
+                background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-2) 14%, var(--surface))); position: relative; overflow: hidden; }
+  .state .art img { width: 58px; height: 58px; position: relative; z-index: 1; }
+  .state h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.01em; }
+  .state p { margin: 0 auto; color: var(--text-2); max-width: 360px; }
+  .features { display: grid; gap: 10px; margin: 26px 0 0; padding: 0; list-style: none; text-align: left; }
+  .features li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+  .features .ic { flex: none; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .features .ic svg { width: 16px; height: 16px; }
+  .features b { display: block; font-size: 14px; }
+  .features span { font-size: 13px; color: var(--text-2); }
+  .scanline { position: absolute; left: 0; right: 0; height: 40%; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 35%, transparent), transparent);
+              animation: scan 1.4s ease-in-out infinite; }
+  @keyframes scan { 0% { transform: translateY(-110%); } 100% { transform: translateY(260%); } }
+  .steps { list-style: none; padding: 0; margin: 22px auto 0; max-width: 280px; text-align: left; display: grid; gap: 10px; }
+  .steps li { display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 14px; transition: color .2s; }
+  .steps li .s { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); flex: none; transition: all .2s; }
+  .steps li.active { color: var(--text); font-weight: 500; }
+  .steps li.active .s { border-color: var(--accent); border-top-color: transparent; animation: spin .7s linear infinite; }
+  .steps li.done { color: var(--text-2); }
+  .steps li.done .s { border-color: var(--safe); background: var(--safe); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Result */
+  .res-head { display: flex; gap: 22px; align-items: center; padding: 24px; border-bottom: 1px solid var(--border); }
+  .gauge { position: relative; width: 112px; height: 112px; flex: none; }
+  .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .gauge .num { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .gauge .num b { font-size: 32px; font-weight: 800; letter-spacing: -.03em; line-height: 1; display: block; }
+  .gauge .num small { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; }
+  .v-safe { --v: var(--safe); --v-soft: var(--safe-soft); }
+  .v-suspicious { --v: var(--warn); --v-soft: var(--warn-soft); }
+  .v-phishing { --v: var(--danger); --v-soft: var(--danger-soft); }
+  .badge { color: var(--v); background: var(--v-soft); }
+  .res-title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin: 8px 0 4px; }
+  .res-sub { color: var(--text-2); font-size: 14px; }
+  .meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .meta dt { color: var(--text-3); font-weight: 500; }
+  .meta dd { margin: 0; overflow-wrap: anywhere; }
+  .section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  .section:last-child { border-bottom: 0; }
+  .section-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); margin: 0 0 12px; }
+  .section-title .count { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .ai { border-radius: 14px; padding: 16px; background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-2) 10%, var(--surface))); border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); }
+  .ai-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .tag { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 7px; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); }
+  .conf { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); margin-bottom: 12px; }
+  .conf .bar { flex: 1; height: 6px; background: color-mix(in srgb, var(--text-3) 25%, transparent); border-radius: 99px; overflow: hidden; }
+  .conf .bar div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 99px; transition: width .9s cubic-bezier(.2,.8,.2,1); }
+  .ai ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .ai li { display: flex; gap: 10px; font-size: 14px; }
+  .ai li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-top: 8px; flex: none; }
+  .advice { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--v-soft); color: var(--text); font-size: 14px; }
+  .advice svg { width: 18px; height: 18px; color: var(--v); flex: none; margin-top: 2px; }
+  .note { font-size: 13px; color: var(--text-3); display: flex; gap: 8px; align-items: center; }
+  .sev-tally { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .sev-tally span { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 7px; }
+  .signals { display: grid; gap: 8px; }
+  .sig { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+  .sig summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 11px 14px; cursor: pointer; font-size: 14px; }
+  .sig summary::-webkit-details-marker { display: none; }
+  .sig summary .chev { margin-left: auto; width: 16px; height: 16px; color: var(--text-3); transition: transform .2s; flex: none; }
+  .sig[open] summary .chev { transform: rotate(90deg); }
+  .sig .ev { padding: 0 14px 12px 40px; font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+  .sevdot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .sev-critical { --s: var(--danger); } .sev-high { --s: color-mix(in srgb, var(--danger) 75%, var(--warn)); }
+  .sev-medium { --s: var(--warn); } .sev-low { --s: var(--text-3); }
+  .sevdot { background: var(--s); }
+  .sev-tally .sev-critical, .sev-tally .sev-high, .sev-tally .sev-medium, .sev-tally .sev-low { color: var(--s); background: color-mix(in srgb, var(--s) 13%, transparent); }
+  .urls { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .urls li { font-size: 12px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; overflow-wrap: anywhere; }
+  .toolbar { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 24px; }
+  .ghost { border: 1px solid var(--border); background: var(--surface); border-radius: 9px; padding: 7px 12px; font-size: 13px; font-weight: 600; color: var(--text-2); display: inline-flex; gap: 6px; align-items: center; }
+  .ghost:hover { color: var(--text); border-color: var(--border-strong); }
+  .ghost svg { width: 14px; height: 14px; }
+  .ghost.more { margin-top: 10px; width: 100%; justify-content: center; }
+  .error { padding: 28px; display: flex; gap: 14px; align-items: flex-start; color: var(--text); }
+  .error .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--danger-soft); color: var(--danger); flex: none; }
+  .fade-in { animation: fadeIn .35s ease both; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .hidden { display: none !important; }
+
+  /* Feature strip + footer */
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 44px; }
+  @media (max-width: 860px) { .strip { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .strip { grid-template-columns: 1fr; } }
+  .strip div { padding: 18px; }
+  .strip b { display: block; font-size: 15px; margin: 10px 0 4px; }
+  .strip p { margin: 0; font-size: 13.5px; color: var(--text-2); }
+  .strip .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .strip .ic svg { width: 18px; height: 18px; }
+  footer { border-top: 1px solid var(--border); padding: 26px 0 40px; color: var(--text-3); font-size: 13px; }
+  footer .wrap { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+  footer a { color: var(--text-2); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+  footer .right { margin-left: auto; display: flex; gap: 18px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>PhishGuard</h1>
-  <p class="sub">Paste a suspicious email or link. Rule-based detectors and Claude analyze it together.</p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0-4 4m4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9m-3 3 3 3"/></symbol>
+    <symbol id="i-paper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 14h6M9 18h4"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-outlook" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  </defs>
+</svg>
 
-  <div class="card">
-    <div class="tabs">
-      <button data-tab="raw" class="active">Raw email (.eml source)</button>
-      <button data-tab="file">Upload .eml</button>
-      <button data-tab="url">URL</button>
-    </div>
-    <div id="tab-raw"><textarea id="raw" placeholder="Paste the full message source (in Gmail: ⋮ → Show original; in Outlook: View → View message source)"></textarea></div>
-    <div id="tab-file" class="hidden"><input type="file" id="file" accept=".eml,message/rfc822"></div>
-    <div id="tab-url" class="hidden"><input type="text" id="url" placeholder="https://example.com/login"></div>
-    <div class="row">
-      <label><input type="checkbox" id="llm" checked> Use AI analysis</label>
-      <input type="password" id="apikey" placeholder="API key (if required)" style="max-width:220px">
-      <button class="go" id="go">Analyze</button>
+<nav>
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/addin/assets/icon-64.png" alt="">PhishGuard</a>
+    <div class="nav-links">
+      <a class="hide-sm" href="/support">Outlook add-in</a>
+      <a class="hide-sm" href="/docs">API</a>
+      <span class="pill" id="aiStatus"><span class="dot"></span><span>Checking AI…</span></span>
     </div>
   </div>
+</nav>
 
-  <div id="out" class="card hidden"></div>
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><svg width="14" height="14"><use href="#i-sparkle"/></svg>Security rules + Claude AI</span>
+    <h1>Spot phishing <span class="grad">before anyone clicks</span></h1>
+    <p class="lede">Paste an email, drop in a .eml file, or check a link. PhishGuard runs dozens of security checks and explains the verdict in plain English.</p>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="grid">
+      <!-- Input -->
+      <section class="card card-pad" aria-label="Message to check">
+        <div class="seg" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="raw"><svg><use href="#i-mail"/></svg>Email</button>
+          <button role="tab" aria-selected="false" data-tab="file"><svg><use href="#i-upload"/></svg>Upload</button>
+          <button role="tab" aria-selected="false" data-tab="url"><svg><use href="#i-link"/></svg>Link</button>
+        </div>
+
+        <div id="tab-raw">
+          <textarea id="raw" spellcheck="false" aria-label="Email source" placeholder="Paste the full email source here.&#10;&#10;Gmail: open the email → ⋮ → Show original&#10;Outlook: open the email → … → View → View message source"></textarea>
+          <div class="samples"><span class="label">Try a sample:</span>
+            <button class="chip" data-sample="phishing_paypal.eml">Fake PayPal</button>
+            <button class="chip" data-sample="malware_attachment.eml">Malware invoice</button>
+            <button class="chip" data-sample="bec_giftcard.eml">CEO gift cards</button>
+            <button class="chip" data-sample="legit_newsletter.eml">Real newsletter</button>
+          </div>
+        </div>
+
+        <div id="tab-file" class="hidden">
+          <label class="drop" id="drop">
+            <input type="file" id="file" accept=".eml,message/rfc822" hidden>
+            <svg><use href="#i-upload"/></svg>
+            <strong>Drop a .eml file here</strong>
+            <span>or click to browse · up to 10 MB</span>
+            <div class="file-name" id="fileName"></div>
+          </label>
+        </div>
+
+        <div id="tab-url" class="hidden">
+          <div class="url-wrap"><svg><use href="#i-link"/></svg><input class="field mono" id="url" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com/login" aria-label="Link to check"></div>
+          <div class="samples"><span class="label">Try:</span>
+            <button class="chip" data-url="http://micros0ft-support.top/login/verify">Lookalike Microsoft</button>
+            <button class="chip" data-url="https://paypal.com.account-review.xyz/signin">Brand in subdomain</button>
+            <button class="chip" data-url="https://github.com/settings/profile">Real GitHub</button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <label class="switch"><input type="checkbox" id="llm" checked><span class="track"></span>AI analysis</label>
+          <span class="kbd hide-sm" id="kbdHint">Ctrl + Enter</span>
+          <button class="btn" id="go"><svg><use href="#i-scan"/></svg><span>Check now</span></button>
+        </div>
+        <details class="key"><summary>Have an access key?</summary>
+          <input class="field mono" type="password" id="apikey" placeholder="Organization access key" autocomplete="off">
+        </details>
+      </section>
+
+      <!-- Output -->
+      <section class="card sticky" id="out" aria-live="polite">
+        <div class="state" id="empty">
+          <div class="art"><img src="/addin/assets/icon-128.png" alt=""></div>
+          <h3>Your verdict appears here</h3>
+          <p>Pick a sample on the left to see PhishGuard in action, or paste a real message.</p>
+          <ul class="features">
+            <li><span class="ic"><svg><use href="#i-key"/></svg></span><div><b>Sender verification</b><span>SPF, DKIM and DMARC results, spoofed names and lookalike domains.</span></div></li>
+            <li><span class="ic"><svg><use href="#i-link"/></svg></span><div><b>Link inspection</b><span>Disguised destinations, brand impersonation and risky hosting.</span></div></li>
+            <li><span class="ic"><svg><use href="#i-sparkle"/></svg></span><div><b>AI reasoning</b><span>Claude reads the whole message and explains what's going on.</span></div></li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <div class="strip">
+      <div class="card"><span class="ic"><svg><use href="#i-bolt"/></svg></span><b>Instant rule checks</b><p>Dozens of signals checked in milliseconds, offline.</p></div>
+      <div class="card"><span class="ic"><svg><use href="#i-sparkle"/></svg></span><b>AI that explains</b><p>Catches well-written scams that rules miss.</p></div>
+      <div class="card"><span class="ic"><svg><use href="#i-outlook"/></svg></span><b>Works in Outlook</b><p>One-click checks on desktop, web and mobile.</p></div>
+      <div class="card"><span class="ic"><svg><use href="#i-scan"/></svg></span><b>Private by design</b><p>Messages aren't stored after the verdict is returned.</p></div>
+    </div>
+  </div>
 </main>
+
+<footer>
+  <div class="wrap">
+    <span>© PhishGuard</span>
+    <div class="right"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Help</a><a href="/docs">API</a></div>
+  </div>
+</footer>
+
 <script>
-const $ = (id) => document.getElementById(id);
-let tab = "raw";
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x === b));
-  tab = b.dataset.tab;
-  ["raw", "file", "url"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== tab));
-}));
-
-function el(tag, attrs = {}, ...children) {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) k === "class" ? (n.className = v) : n.setAttribute(k, v);
-  for (const c of children) if (c != null) n.append(c);  // append() treats strings as text: no HTML injection
-  return n;
-}
-
-function render(r) {
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
   const out = $("out");
-  out.replaceChildren();
-  const color = { safe: "var(--safe)", suspicious: "var(--sus)", phishing: "var(--phish)" }[r.verdict];
-  out.append(
-    el("div", { class: "verdict " + r.verdict }, r.verdict.toUpperCase()),
-    el("div", { class: "meter" }, Object.assign(el("div"), { style: `width:${r.risk_score}%;background:${color}` })),
-    el("div", { class: "muted" }, `Risk ${r.risk_score}/100 · rules ${r.heuristic_score}/100 · AI: ${r.llm_status}`)
-  );
-  for (const [k, v] of Object.entries(r.summary || {})) if (v) out.append(el("div", { class: "muted" }, `${k}: ${v}`));
-  if (r.llm) {
-    out.append(el("h3", {}, "AI assessment"),
-      el("div", {}, `${r.llm.verdict} · ${Math.round(r.llm.confidence * 100)}% confidence · ${r.llm.attack_type} · impersonating: ${r.llm.impersonated_brand}`),
-      el("ul", {}, ...r.llm.reasons.map((x) => el("li", {}, x))),
-      el("div", {}, el("strong", {}, "Recommended: "), r.llm.recommended_action));
-  }
-  const f = r.findings.filter((x) => x.severity !== "info");
-  out.append(el("h3", {}, `Signals (${f.length})`));
-  out.append(f.length ? el("ul", {}, ...f.map((x) => el("li", {},
-    el("span", { class: "sev sev-" + x.severity }, x.severity), x.description,
-    x.evidence ? el("div", { class: "muted" }, el("code", {}, x.evidence)) : null))) : el("div", { class: "muted" }, "No rule-based signals."));
-  out.classList.remove("hidden");
-}
+  let tab = "raw", busy = false, lastReport = null;
 
-$("go").addEventListener("click", async () => {
-  const useLlm = $("llm").checked;
-  const headers = {};
-  if ($("apikey").value) headers["X-API-Key"] = $("apikey").value;
-  let resp;
-  $("go").disabled = true; $("go").textContent = "Analyzing…";
-  try {
-    if (tab === "file") {
-      if (!$("file").files[0]) throw new Error("Choose a file first");
-      const fd = new FormData(); fd.append("file", $("file").files[0]);
-      resp = await fetch(`/api/v1/analyze/eml?use_llm=${useLlm}`, { method: "POST", body: fd, headers });
-    } else {
-      const body = tab === "url" ? { url: $("url").value, use_llm: useLlm } : { raw: $("raw").value, use_llm: useLlm };
-      resp = await fetch(`/api/v1/analyze/${tab === "url" ? "url" : "email"}`, {
-        method: "POST", body: JSON.stringify(body), headers: { ...headers, "Content-Type": "application/json" } });
+  // ---------- helpers (all dynamic text goes through textContent) ----------
+  function h(tag, props = {}, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (v == null) continue;
+      if (k === "class") n.className = v;
+      else if (k === "style") n.style.cssText = v;
+      else n.setAttribute(k, v);
     }
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
-    render(data);
-  } catch (e) {
-    $("out").replaceChildren(el("div", { class: "phishing" }, "Error: " + e.message));
-    $("out").classList.remove("hidden");
-  } finally {
-    $("go").disabled = false; $("go").textContent = "Analyze";
+    for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
+    return n;
   }
-});
+  function icon(id, size, cls) {
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    if (size) { s.setAttribute("width", size); s.setAttribute("height", size); }
+    if (cls) s.setAttribute("class", cls);
+    const u = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    u.setAttribute("href", "#" + id); s.append(u); return s;
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- status pill ----------
+  fetch("/health").then((r) => r.json()).then((d) => {
+    const pill = $("aiStatus");
+    pill.replaceChildren(h("span", { class: "dot" + (d.llm_enabled ? " on" : "") }), h("span", {}, d.llm_enabled ? "AI online" : "Rules only"));
+    pill.title = d.llm_enabled ? `AI model: ${d.model}` : "AI analysis is turned off on this server";
+    if (!d.llm_enabled) { $("llm").checked = false; $("llm").disabled = true; }
+  }).catch(() => {});
+  if (/Mac|iPhone|iPad/.test(navigator.platform)) $("kbdHint").textContent = "⌘ + Enter";
+
+  // ---------- tabs ----------
+  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+    tab = b.dataset.tab;
+    document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    ["raw", "file", "url"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== tab));
+  }));
+
+  // ---------- samples ----------
+  document.querySelectorAll("[data-sample]").forEach((b) => b.addEventListener("click", async () => {
+    const r = await fetch("/static/samples/" + b.dataset.sample);
+    $("raw").value = await r.text();
+    analyze();
+  }));
+  document.querySelectorAll("[data-url]").forEach((b) => b.addEventListener("click", () => { $("url").value = b.dataset.url; analyze(); }));
+
+  // ---------- file drop ----------
+  const drop = $("drop");
+  const setFile = (f) => { $("fileName").textContent = f ? `${f.name} · ${(f.size / 1024).toFixed(1)} KB` : ""; };
+  $("file").addEventListener("change", () => setFile($("file").files[0]));
+  ["dragenter", "dragover"].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (ev) => {
+    const f = ev.dataTransfer.files[0]; if (!f) return;
+    const dt = new DataTransfer(); dt.items.add(f); $("file").files = dt.files; setFile(f);
+  });
+
+  document.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") analyze(); });
+  $("go").addEventListener("click", analyze);
+
+  // ---------- loading animation ----------
+  function showScanning(useLlm) {
+    const labels = tab === "url" ? ["Parsing the link", "Checking the domain", "Looking for disguises"] : ["Reading headers", "Verifying the sender", "Inspecting links", "Scanning content & attachments"];
+    if (useLlm) labels.push("Asking Claude for a second opinion");
+    const items = labels.map((t) => h("li", {}, h("span", { class: "s" }), t));
+    out.replaceChildren(h("div", { class: "state fade-in" },
+      h("div", { class: "art" }, h("div", { class: "scanline" }), h("img", { src: "/addin/assets/icon-128.png", alt: "" })),
+      h("h3", {}, "Analyzing…"), h("p", {}, "This usually takes a few seconds."),
+      h("ul", { class: "steps" }, items)));
+    let i = 0;
+    items[0].classList.add("active");
+    const timer = setInterval(() => {
+      if (i < items.length - 1) { items[i].className = "done"; items[++i].classList.add("active"); }
+    }, useLlm ? 650 : 280);
+    return async () => {
+      clearInterval(timer);
+      for (; i < items.length; i++) { items[i].className = "done"; if (!reduced) await sleep(110); }
+      if (!reduced) await sleep(180);
+    };
+  }
+
+  // ---------- request ----------
+  async function analyze() {
+    if (busy) return;
+    const useLlm = $("llm").checked;
+    const headers = {};
+    if ($("apikey").value) headers["X-API-Key"] = $("apikey").value;
+    let req;
+    if (tab === "file") {
+      const f = $("file").files[0];
+      if (!f) return showError("Choose a .eml file first.");
+      const fd = new FormData(); fd.append("file", f);
+      req = fetch(`/api/v1/analyze/eml?use_llm=${useLlm}`, { method: "POST", body: fd, headers });
+    } else {
+      const val = (tab === "url" ? $("url") : $("raw")).value.trim();
+      if (!val) return showError(tab === "url" ? "Enter a link to check." : "Paste an email, or pick a sample.");
+      const body = tab === "url" ? { url: val, use_llm: useLlm } : { raw: val, use_llm: useLlm };
+      req = fetch(`/api/v1/analyze/${tab === "url" ? "url" : "email"}`, { method: "POST", body: JSON.stringify(body), headers: { ...headers, "Content-Type": "application/json" } });
+    }
+    busy = true; $("go").disabled = true; $("go").lastElementChild.textContent = "Checking…";
+    const finish = showScanning(useLlm);
+    if (matchMedia("(max-width: 960px)").matches) out.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    try {
+      const [resp] = await Promise.all([req, sleep(reduced ? 0 : 900)]);
+      const data = await resp.json().catch(() => ({}));
+      await finish();
+      if (resp.status === 401) return showError("This server needs an access key. Open “Have an access key?” and enter it.");
+      if (!resp.ok) return showError(typeof data.detail === "string" ? data.detail : `Request failed (${resp.status}).`);
+      lastReport = data; render(data);
+    } catch (e) {
+      await finish(); showError("Couldn't reach the PhishGuard server. Check your connection and try again.");
+    } finally {
+      busy = false; $("go").disabled = false; $("go").lastElementChild.textContent = "Check now";
+    }
+  }
+
+  function showError(msg) {
+    out.replaceChildren(h("div", { class: "error fade-in" }, h("span", { class: "ic" }, icon("i-alert", 18)),
+      h("div", {}, h("b", {}, "Something needs your attention"), h("div", { style: "color:var(--text-2);margin-top:2px" }, msg))));
+  }
+
+  // ---------- result rendering ----------
+  const VERDICT = {
+    safe: { title: "Looks safe", sub: "No meaningful phishing signals found.", advice: "Still be cautious with unexpected requests for money, passwords or codes." },
+    suspicious: { title: "Be careful", sub: "Some warning signs. Verify before acting.", advice: "Don't click links or open attachments until you've confirmed the sender another way, such as a known phone number." },
+    phishing: { title: "Phishing detected", sub: "Strong signs this message is an attack.", advice: "Don't click, reply or open attachments. Report it to your security team, then delete it." },
+  };
+  const SEV_ORDER = ["critical", "high", "medium", "low"];
+  const TOP_SIGNALS = 6;
+
+  function gauge(score, verdict) {
+    const R = 48, C = 2 * Math.PI * R;
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", "0 0 112 112");
+    const mk = (attrs) => { const c = document.createElementNS(ns, "circle"); for (const [k, v] of Object.entries(attrs)) c.setAttribute(k, v); return c; };
+    svg.append(mk({ cx: 56, cy: 56, r: R, fill: "none", stroke: "var(--surface-2)", "stroke-width": 10 }));
+    const arc = mk({ cx: 56, cy: 56, r: R, fill: "none", stroke: "var(--v)", "stroke-width": 10, "stroke-linecap": "round", "stroke-dasharray": C, "stroke-dashoffset": C });
+    arc.style.transition = "stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)";
+    svg.append(arc);
+    const num = h("b", {}, "0");
+    const wrap = h("div", { class: "gauge" }, svg, h("div", { class: "num" }, h("div", {}, num, h("small", {}, "risk"))));
+    requestAnimationFrame(() => requestAnimationFrame(() => { arc.style.strokeDashoffset = C * (1 - score / 100); }));
+    if (reduced) num.textContent = score;
+    else { const t0 = performance.now(); const step = (t) => { const p = Math.min(1, (t - t0) / 1100); num.textContent = Math.round(score * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+    return wrap;
+  }
+
+  function render(r) {
+    const v = VERDICT[r.verdict];
+    const card = h("div", { class: "fade-in v-" + r.verdict });
+
+    card.append(h("div", { class: "res-head" }, gauge(r.risk_score, r.verdict),
+      h("div", {}, h("span", { class: "badge" }, r.verdict), h("div", { class: "res-title" }, v.title), h("div", { class: "res-sub" }, v.sub))));
+
+    const meta = Object.entries(r.summary || {}).filter(([, x]) => x);
+    if (meta.length) card.append(h("dl", { class: "meta" }, meta.flatMap(([k, x]) => [h("dt", {}, k.replace("_", "-")), h("dd", { class: k === "url" ? "mono" : null }, x)])));
+
+    // AI section
+    const ai = h("div", { class: "section" }, h("div", { class: "section-title" }, icon("i-sparkle", 14), "AI assessment"));
+    if (r.llm) {
+      const bar = h("div");
+      const box = h("div", { class: "ai" },
+        h("div", { class: "ai-top" }, h("span", { class: "badge" }, r.llm.verdict),
+          r.llm.attack_type && r.llm.attack_type !== "none" ? h("span", { class: "tag" }, r.llm.attack_type.replaceAll("_", " ")) : null,
+          r.llm.impersonated_brand && r.llm.impersonated_brand.toLowerCase() !== "none" ? h("span", { class: "tag" }, "Impersonating " + r.llm.impersonated_brand) : null),
+        h("div", { class: "conf" }, "Confidence", h("div", { class: "bar" }, bar), h("b", {}, Math.round(r.llm.confidence * 100) + "%")),
+        h("ul", {}, (r.llm.reasons || []).map((x) => h("li", {}, x))));
+      requestAnimationFrame(() => requestAnimationFrame(() => (bar.style.width = Math.round(r.llm.confidence * 100) + "%")));
+      ai.append(box);
+    } else {
+      const why = r.llm_status === "disabled" ? "AI analysis was off for this check, so the verdict is based on security rules." : `AI analysis unavailable (${r.llm_status}). The verdict is based on security rules.`;
+      ai.append(h("div", { class: "note" }, icon("i-info", 15), why));
+    }
+    ai.append(h("div", { class: "advice" }, icon(r.verdict === "safe" ? "i-scan" : "i-alert"), h("div", {}, r.llm && r.llm.recommended_action ? r.llm.recommended_action : v.advice)));
+    card.append(ai);
+
+    // Signals
+    const sigs = (r.findings || []).filter((f) => f.severity !== "info");
+    const sec = h("div", { class: "section" }, h("div", { class: "section-title" }, icon("i-alert", 14), "Warning signs", h("span", { class: "count" }, sigs.length ? `${sigs.length} found` : "")));
+    if (sigs.length) {
+      const tally = SEV_ORDER.map((s) => [s, sigs.filter((f) => f.severity === s).length]).filter(([, n]) => n);
+      sec.append(h("div", { class: "sev-tally" }, tally.map(([s, n]) => h("span", { class: "sev-" + s }, `${n} ${s}`))));
+      const list = h("div", { class: "signals" }, sigs.map((f, i) => {
+        const d = h("details", { class: "sig sev-" + f.severity }, h("summary", {}, h("span", { class: "sevdot" }), h("span", {}, f.description), icon("i-chev", 16, "chev")),
+          f.evidence ? h("div", { class: "ev mono" }, f.evidence) : h("div", { class: "ev" }, `${f.analyzer} · ${f.rule}`));
+        if (!reduced) d.style.animation = `fadeIn .3s ease ${Math.min(i, 10) * 40}ms both`;
+        if (i >= TOP_SIGNALS) d.classList.add("hidden");
+        return d;
+      }));
+      sec.append(list);
+      if (sigs.length > TOP_SIGNALS) {
+        const more = h("button", { class: "ghost more" }, `Show ${sigs.length - TOP_SIGNALS} more`);
+        more.addEventListener("click", () => { list.querySelectorAll(".sig.hidden").forEach((x) => x.classList.remove("hidden")); more.remove(); });
+        sec.append(more);
+      }
+    } else {
+      sec.append(h("div", { class: "note" }, icon("i-scan", 15), "No rule-based warning signs."));
+    }
+    card.append(sec);
+
+    if (r.urls && r.urls.length && r.summary && !r.summary.url) {
+      card.append(h("div", { class: "section" }, h("div", { class: "section-title" }, icon("i-link", 14), "Links found", h("span", { class: "count" }, String(r.urls.length))),
+        h("ul", { class: "urls" }, r.urls.slice(0, 20).map((u) => h("li", { class: "mono" }, u)))));
+    }
+
+    const copy = h("button", { class: "ghost" }, icon("i-copy"), "Copy JSON");
+    copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(JSON.stringify(lastReport, null, 2)); copy.lastChild.textContent = "Copied"; setTimeout(() => (copy.lastChild.textContent = "Copy JSON"), 1500); } catch (e) {} });
+    const again = h("button", { class: "ghost" }, icon("i-reset"), "New check");
+    again.addEventListener("click", () => { $("raw").value = ""; $("url").value = ""; window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" }); (tab === "url" ? $("url") : $("raw")).focus(); });
+    card.append(h("div", { class: "toolbar" }, again, copy));
+
+    out.replaceChildren(card);
+  }
+})();
 </script>
 </body>
 </html>
