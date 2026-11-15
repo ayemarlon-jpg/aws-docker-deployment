@@ -85,25 +85,17 @@ All settings are environment variables. See [`.env.example`](.env.example) for t
 
 ## Deploying to AWS
 
-The image is a standard container, so it runs on ECS Fargate, App Runner or EC2.
+**To put it online for anyone to use**, follow [docs/deploy-aws.md](docs/deploy-aws.md). It takes about 15 minutes of one-time setup:
+1. Upload [`infra/aws-lightsail.yml`](infra/aws-lightsail.yml) to CloudFormation. This creates a Lightsail container service with a public HTTPS address, plus a deploy role that only this repository can use.
+2. Paste two values into the GitHub repository variables.
+3. Add `ANTHROPIC_API_KEY` as a repository secret.
+4. Run the **Deploy to AWS** workflow.
 
-```bash
-AWS_REGION=us-east-1
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-REPO=$ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/phishguard
+After that, every merge into `main` deploys automatically through [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). No AWS keys are stored in GitHub: the workflow uses GitHub's short-lived OIDC tokens.
 
-aws ecr create-repository --repository-name phishguard --region $AWS_REGION
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com
-docker build --platform linux/amd64 -t $REPO:latest .
-docker push $REPO:latest
-```
+A public deployment limits AI checks for anonymous visitors to `PHISHGUARD_AI_LIMIT_PER_IP_HOUR` (default 20) and `PHISHGUARD_AI_LIMIT_PER_DAY` (default 500), so the Claude bill stays bounded. Callers with the organization access key aren't limited, and rule checks are never limited.
 
-Then do the following:
-
-- **API:** create an ECS Fargate service, or an App Runner service, from `$REPO:latest` on port 8000. Use `/health` as the health-check path and put it behind an ALB with HTTPS.
-- **Mailbox monitor:** run a second ECS service from the same image with the command `python -m phishguard.automation.mailbox` and a desired count of **1**. Set `PHISHGUARD_STATE_FILE` to a path on an EFS mount so the last processed message survives restarts.
-- **Secrets:** store `ANTHROPIC_API_KEY`, `IMAP_PASSWORD`, `PHISHGUARD_API_KEY` and the webhook URL in AWS Secrets Manager. Inject them through the task definition's `secrets` block, not as plain environment variables.
-- **EC2 alternative:** install Docker, copy the repo and `.env` to the instance, and run `docker compose --profile mailbox up -d`.
+The image is a standard container, so it also runs on ECS Fargate, App Runner, or any Docker host. For EC2, install Docker, copy the repo and `.env`, and run `docker compose --profile mailbox up -d`.
 
 ## Microsoft Outlook add-in
 

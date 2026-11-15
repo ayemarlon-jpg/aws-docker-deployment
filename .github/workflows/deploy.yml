@@ -1,0 +1,139 @@
+name: Deploy to AWS
+
+# Builds the container, pushes it to the Lightsail container service created by
+# infra/aws-lightsail.yml, and rolls it out. Runs on every push to main once the
+# repository variable AWS_ROLE_ARN is set (see docs/deploy-aws.md), or manually.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # lets GitHub issue a short-lived token that AWS trusts (no stored AWS keys)
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  SERVICE_NAME: ${{ vars.LIGHTSAIL_SERVICE || 'phishguard' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  deploy:
+    needs: test
+    if: ${{ vars.AWS_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    # No `environment:` here on purpose: it would change the identity GitHub presents to AWS
+    # and break the trust policy in infra/aws-lightsail.yml (which allows refs/heads/main).
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install the Lightsail image push plugin
+        run: |
+          sudo curl -fsSL "https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl" -o /usr/local/bin/lightsailctl
+          sudo chmod +x /usr/local/bin/lightsailctl
+
+      - name: Look up the public URL
+        id: url
+        env:
+          CUSTOM_URL: ${{ vars.PHISHGUARD_PUBLIC_URL }}
+        run: |
+          if [ -n "$CUSTOM_URL" ]; then
+            url="$CUSTOM_URL"
+          else
+            url=$(aws lightsail get-container-services --service-name "$SERVICE_NAME" --query 'containerServices[0].url' --output text)
+          fi
+          url="${url%/}"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Public URL: $url"
+
+      - name: Build image
+        run: docker build --platform linux/amd64 -t phishguard:${{ github.sha }} .
+
+      - name: Push image to Lightsail
+        id: push
+        run: |
+          out=$(aws lightsail push-container-image --region "$AWS_REGION" --service-name "$SERVICE_NAME" --label app --image "phishguard:${{ github.sha }}")
+          echo "$out"
+          image=$(echo "$out" | grep -oE '":[^"]+"' | tail -1 | tr -d '"')
+          test -n "$image" || { echo "Could not read the pushed image name"; exit 1; }
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy new version
+        env:
+          IMAGE: ${{ steps.push.outputs.image }}
+          PUBLIC_URL: ${{ steps.url.outputs.url }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PHISHGUARD_API_KEY: ${{ secrets.PHISHGUARD_API_KEY }}
+          PHISHGUARD_WEBHOOK_URL: ${{ secrets.PHISHGUARD_WEBHOOK_URL }}
+          PROVIDER_NAME: ${{ vars.PHISHGUARD_PROVIDER_NAME || 'PhishGuard' }}
+          SUPPORT_EMAIL: ${{ vars.PHISHGUARD_SUPPORT_EMAIL || 'support@example.com' }}
+          AI_PER_IP: ${{ vars.PHISHGUARD_AI_LIMIT_PER_IP_HOUR || '20' }}
+          AI_PER_DAY: ${{ vars.PHISHGUARD_AI_LIMIT_PER_DAY || '500' }}
+        run: |
+          llm_enabled=false
+          [ -n "$ANTHROPIC_API_KEY" ] && llm_enabled=true
+          # Built with jq so secret values are never interpolated into the shell or printed.
+          jq -n \
+            --arg image "$IMAGE" --arg url "$PUBLIC_URL" --arg llm "$llm_enabled" \
+            --arg akey "$ANTHROPIC_API_KEY" --arg pkey "$PHISHGUARD_API_KEY" --arg hook "$PHISHGUARD_WEBHOOK_URL" \
+            --arg provider "$PROVIDER_NAME" --arg support "$SUPPORT_EMAIL" --arg region "$AWS_REGION" \
+            --arg perip "$AI_PER_IP" --arg perday "$AI_PER_DAY" '
+            {app: {image: $image, ports: {"8000": "HTTP"},
+              environment: ({
+                PHISHGUARD_PUBLIC_BASE_URL: $url, PHISHGUARD_LLM_ENABLED: $llm,
+                PHISHGUARD_PROVIDER_NAME: $provider, PHISHGUARD_SUPPORT_EMAIL: $support,
+                PHISHGUARD_HOSTING_REGION: ("AWS " + $region),
+                PHISHGUARD_AI_LIMIT_PER_IP_HOUR: $perip, PHISHGUARD_AI_LIMIT_PER_DAY: $perday,
+                FORWARDED_ALLOW_IPS: "*"
+              } + (if $akey != "" then {ANTHROPIC_API_KEY: $akey} else {} end)
+                + (if $pkey != "" then {PHISHGUARD_API_KEY: $pkey} else {} end)
+                + (if $hook != "" then {PHISHGUARD_WEBHOOK_URL: $hook} else {} end))}}' > "$RUNNER_TEMP/containers.json"
+          jq -n '{containerName: "app", containerPort: 8000,
+                  healthCheck: {path: "/health", intervalSeconds: 10, timeoutSeconds: 5, healthyThreshold: 2, unhealthyThreshold: 3, successCodes: "200"}}' > "$RUNNER_TEMP/endpoint.json"
+          aws lightsail create-container-service-deployment --service-name "$SERVICE_NAME" \
+            --containers "file://$RUNNER_TEMP/containers.json" \
+            --public-endpoint "file://$RUNNER_TEMP/endpoint.json" \
+            --query 'containerService.state' --output text
+          rm -f "$RUNNER_TEMP/containers.json"
+
+      - name: Wait until the new version is live
+        env:
+          PUBLIC_URL: ${{ steps.url.outputs.url }}
+        run: |
+          for i in $(seq 1 60); do
+            state=$(aws lightsail get-container-services --service-name "$SERVICE_NAME" --query 'containerServices[0].state' --output text)
+            echo "Attempt $i: service is $state"
+            if [ "$state" = "RUNNING" ] && curl -fsS "$PUBLIC_URL/health" >/dev/null 2>&1; then
+              latest=$(aws lightsail get-container-service-deployments --service-name "$SERVICE_NAME" --query 'deployments[0].state' --output text)
+              echo "Latest deployment: $latest"
+              [ "$latest" = "ACTIVE" ] && break
+              [ "$latest" = "FAILED" ] && { echo "Deployment failed - check the container logs in the Lightsail console"; exit 1; }
+            fi
+            sleep 15
+          done
+          [ "${latest:-}" = "ACTIVE" ] || { echo "Timed out waiting for the deployment"; exit 1; }
+          {
+            echo "## PhishGuard is live"
+            echo ""
+            echo "- Web app: $PUBLIC_URL"
+            echo "- Outlook add-in manifest: $PUBLIC_URL/addin/manifest.xml"
+          } >> "$GITHUB_STEP_SUMMARY"

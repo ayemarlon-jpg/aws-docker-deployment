@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  PhishGuard public hosting: a Lightsail container service (public HTTPS URL included)
+  and an IAM role that lets this GitHub repository's Deploy workflow update it,
+  using GitHub's short-lived OIDC tokens (no AWS keys stored in GitHub).
+
+Parameters:
+  GitHubRepository:
+    Type: String
+    Default: ayemarlon-jpg/aws-docker-deployment
+    Description: owner/name of the GitHub repository allowed to deploy.
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Only workflow runs on this branch can deploy.
+  ServiceName:
+    Type: String
+    Default: phishguard
+    AllowedPattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+    Description: Lightsail container service name (part of the public URL).
+  Power:
+    Type: String
+    Default: micro
+    AllowedValues: [nano, micro, small, medium]
+    Description: Container size. micro (1 GB RAM) is plenty to start.
+  CreateGitHubOIDCProvider:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Set to false if this AWS account already has the token.actions.githubusercontent.com
+      identity provider (the stack fails with "already exists" otherwise).
+
+Conditions:
+  CreateOIDC: !Equals [!Ref CreateGitHubOIDCProvider, "true"]
+
+Resources:
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOIDC
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  ContainerService:
+    Type: AWS::Lightsail::Container
+    Properties:
+      ServiceName: !Ref ServiceName
+      Power: !Ref Power
+      Scale: 1
+      IsDisabled: false
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by the PhishGuard GitHub Actions Deploy workflow
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
+      Policies:
+        - PolicyName: deploy-phishguard-container
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Only the handful of actions a container deploy needs. Lightsail's support for
+              # resource-level restrictions is limited, so these apply to container services
+              # in this account rather than to one service ARN.
+              - Sid: DeployContainers
+                Effect: Allow
+                Action:
+                  - lightsail:GetContainerServices
+                  - lightsail:GetContainerImages
+                  - lightsail:GetContainerServiceDeployments
+                  - lightsail:RegisterContainerImage
+                  - lightsail:CreateContainerServiceDeployment
+                  - lightsail:CreateContainerServiceRegistryLogin
+                Resource: "*"
+
+Outputs:
+  DeployRoleArn:
+    Description: Paste this into the GitHub repository variable AWS_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn
+  Region:
+    Description: Paste this into the GitHub repository variable AWS_REGION
+    Value: !Ref AWS::Region
+  ServiceName:
+    Description: Lightsail container service name
+    Value: !Ref ServiceName
+  PublicUrl:
+    Description: Your public PhishGuard address (live after the first deploy)
+    Value: !GetAtt ContainerService.Url
